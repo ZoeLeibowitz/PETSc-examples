@@ -130,7 +130,7 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscCall(DMGetApplicationContext(da, &user));
 
 
-    for (i=info.xs; i<= info.xm-1; i++) {
+    for (i=info.xs; i<=info.xs+info.xm-1; i++) {
         if (i == 0) {
             f_vec[i+1] = x_vec[i+1] - user->alpha;
         }
@@ -195,28 +195,26 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
     PetscCall(DMGlobalToLocal(dm0,user->sol,INSERT_VALUES,sol_local));
     PetscCall(VecGetArray(sol_local,&sol_vec));
 
-
-    for (int ix = 0; ix <= 8; ix += 1)
+    for (int ix = info.xs; ix <= info.xs+info.mx-1; ix += 1)
     {
         dRdu = (- (user->rho / 2.0) / PetscSqrtReal(sol_vec[ix+1]))*h*h;
 
         if (ix == 0) {
             y_u_vec[ix + 1] = x_u_vec[ix + 1];
         }
-        else if (ix == 8){
+        else if (ix == info.mx-1){
             y_u_vec[ix + 1] =  x_u_vec[ix + 1];
         }
         else if (ix == 1){
             y_u_vec[ix + 1] = - x_u_vec[ix + 2] + (2.0 - dRdu) * x_u_vec[ix + 1];
         }
-        else if (ix == 7){
+        else if (ix == info.mx-2){
             y_u_vec[ix + 1] =  (2.0 - dRdu) * x_u_vec[ix + 1] - x_u_vec[ix];
         }
         else {
             y_u_vec[ix + 1] = - x_u_vec[ix + 2] + (2.0 - dRdu) * x_u_vec[ix + 1] - x_u_vec[ix];
 
         }
-
     }
     PetscCall(VecRestoreArray(sol_local,&sol_vec));
     PetscCall(VecRestoreArray(yloc,&y_u_vec));
