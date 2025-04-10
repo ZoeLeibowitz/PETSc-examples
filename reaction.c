@@ -71,7 +71,7 @@ int main(int argc,char **args) {
   PetscCall(SNESSetFromOptions(snes));
 
   PetscCall(SNESSolve(snes,NULL,u));
-//   PetscCall(VecView(u, PETSC_VIEWER_STDOUT_WORLD));
+
   PetscCall(VecAXPY(u,-1.0,uexact));    // u <- u + (-1.0) uexact
   PetscCall(VecNorm(u,NORM_INFINITY,&errnorm));
   PetscCall(PetscPrintf(PETSC_COMM_WORLD,
