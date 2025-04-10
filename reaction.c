@@ -33,7 +33,6 @@ int main(int argc,char **args) {
   user.alpha = user.M;
   user.beta  = 16.0 * user.M;
   user.noRinJ = PETSC_FALSE;
-  user.sol = u;
 
   PetscOptionsBegin(PETSC_COMM_WORLD,"rct_","options for reaction",""); 
   PetscCall(PetscOptionsBool("-noRinJ","do not include R(u) term in Jacobian",
@@ -51,6 +50,8 @@ int main(int argc,char **args) {
   PetscCall(SNESCreate(PETSC_COMM_WORLD,&snes));
   PetscCall(SNESSetDM(snes,da));
   PetscCall(DMCreateMatrix(da,&J));
+
+  user.sol = u;
 
   PetscCall(DMSetApplicationContext(da,&user));
   PetscCall(SNESSetJacobian(snes, J, J, MatMFFDComputeJacobian, NULL));
@@ -83,7 +84,7 @@ int main(int argc,char **args) {
   PetscCall(PetscFinalize());
   return 0;
 }
-
+//ENDMAIN
 
 PetscReal f_source(PetscReal x) {
     return 0.0;
