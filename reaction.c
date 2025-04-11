@@ -2,6 +2,13 @@ static char help[] = "1D reaction-diffusion problem with DMDA and SNES.  Option 
 // Matrix free version of https://github.com/bueler/p4pdes/blob/master/c/ch4/reaction.c
 // with a hand-written jacobian
 
+
+
+// # Non linear example 
+// can test with devito
+
+// mpiexec -n 2 ./reaction2 -snes_converged_reason -ksp_converged_reason -ksp_type cg -da_refine 7
+
 #include <petsc.h>
 #include <petscsnes.h>
 #include <petscdmda.h>
@@ -16,13 +23,14 @@ extern PetscReal f_source(PetscReal);
 extern PetscErrorCode InitialAndExact(DMDALocalInfo*, PetscReal*, PetscReal*, AppCtx*);
 extern PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy);
 extern PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y);
+extern PetscErrorCode FormFunctionLocal(DMDALocalInfo*, PetscReal*, PetscReal*, AppCtx*);
 
 //STARTMAIN
 int main(int argc,char **args) {
   DM            da;
   SNES          snes;
   AppCtx        user;
-  Vec           u, uexact, r;
+  Vec           u, uexact;
   PetscReal     errnorm, *au, *auex;
   DMDALocalInfo info;
   Mat J;
@@ -42,7 +50,6 @@ int main(int argc,char **args) {
   PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_GHOSTED,9,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
-
 
   PetscCall(DMCreateGlobalVector(da,&u));
 
@@ -76,7 +83,7 @@ int main(int argc,char **args) {
   PetscCall(VecNorm(u,NORM_INFINITY,&errnorm));
   PetscCall(PetscPrintf(PETSC_COMM_WORLD,
       "on %d point grid:  |u-u_exact|_inf = %g\n",info.mx,errnorm));
-
+  
   PetscCall(VecDestroy(&u));
   PetscCall(VecDestroy(&uexact));
   PetscCall(SNESDestroy(&snes));
@@ -84,7 +91,7 @@ int main(int argc,char **args) {
   PetscCall(PetscFinalize());
   return 0;
 }
-//ENDMAIN
+
 
 PetscReal f_source(PetscReal x) {
     return 0.0;
@@ -118,44 +125,48 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscCall(DMDAGetLocalInfo(da, &info));
 
     PetscReal  h = 1.0 / (info.mx-1), x, R;
-    PetscCall(DMGetLocalVector(da, &flocal));
     PetscCall(DMGetLocalVector(da, &xlocal));
 
     PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xlocal));
     PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xlocal));
 
-    PetscCall(VecGetArray(xlocal, &x_vec));
-    PetscCall(VecGetArray(flocal, &f_vec));
+    PetscInt xs, xm;
+    PetscCall(DMDAGetCorners(da, &xs, NULL, NULL, &xm, NULL, NULL));
+
+    PetscInt Mx;
+    PetscCall(DMDAGetInfo(da, PETSC_IGNORE, &Mx, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE));
 
     PetscCall(DMGetApplicationContext(da, &user));
 
+    PetscCall(DMDAVecGetArrayRead(da, xlocal, &x_vec));
+    PetscCall(DMDAVecGetArray(da, F, &f_vec));
 
-    for (i=info.xs; i<=info.xs+info.xm-1; i++) {
-        if (i == 0) {
-            f_vec[i+1] = x_vec[i+1] - user->alpha;
+    for (i=xs; i<xs+xm; i++) {
+        if (i==0){
+            f_vec[i] = x_vec[i] - user->alpha;
         }
-        else if (i == info.mx-1) {
-            f_vec[i+1] = x_vec[i+1] - user->beta;
+
+        else if (i==Mx-1){
+            f_vec[i] = x_vec[i] - user->beta;
         }
-        else {  // interior location
-            if (i == 1) {
-                f_vec[i+1] = - x_vec[i+2] + 2.0 * x_vec[i+1] - user->alpha;
-            } else if (i == info.mx-2) {
-                f_vec[i+1] = - user->beta + 2.0 * x_vec[i+1] - x_vec[i];
-            } else {
-                f_vec[i+1] = - x_vec[i+2] + 2.0 * x_vec[i+1] - x_vec[i];
+        else{
+            if (i==1){
+                f_vec[i] = - x_vec[i+1] + 2.0 * x_vec[i] - user->alpha;
             }
-            R = - user->rho * PetscSqrtReal(x_vec[i+1]);
-            x = (i+1) * h;
-            f_vec[i+1] -= h*h * (R + f_source(x));
+            else if (i==Mx-2){
+                f_vec[i] = - user->beta + 2.0 * x_vec[i] - x_vec[i-1];
+            }
+            else{
+                f_vec[i] = - x_vec[i+1] + 2.0 * x_vec[i] - x_vec[i-1];
+            }
+            R = - user->rho * PetscSqrtReal(x_vec[i]);
+            x = (i) * h;
+            f_vec[i] -= h*h * (R + f_source(x));
         }
     }
 
-    PetscCall(VecRestoreArray(xlocal, &x_vec));
-    PetscCall(VecRestoreArray(flocal, &f_vec));
-    PetscCall(DMLocalToGlobalBegin(da, flocal, INSERT_VALUES, F));
-    PetscCall(DMLocalToGlobalEnd(da, flocal, INSERT_VALUES, F));
-    PetscCall(DMRestoreLocalVector(da, &flocal));
+    PetscCall(DMDAVecRestoreArrayRead(da, xlocal, &x_vec));
+    PetscCall(DMDAVecRestoreArray(da, F, &f_vec));
     PetscCall(DMRestoreLocalVector(da, &xlocal));
     PetscFunctionReturn(0);
 }
@@ -181,11 +192,13 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
   
     PetscCall(MatGetDM(J,&(dm0)));
     PetscCall(DMGetLocalVector(dm0,&(xloc)));
+
     PetscCall(DMGlobalToLocalBegin(dm0,X,INSERT_VALUES,xloc));
     PetscCall(DMGlobalToLocalEnd(dm0,X,INSERT_VALUES,xloc));
+
     PetscCall(DMGetLocalVector(dm0,&(yloc)));
-    PetscCall(VecGetArray(yloc,&y_u_vec));
-    PetscCall(VecGetArray(xloc,&x_u_vec));
+    PetscCall(DMDAVecGetArray(dm0,yloc,&y_u_vec));
+    PetscCall(DMDAVecGetArray(dm0,xloc,&x_u_vec));
     PetscCall(DMDAGetLocalInfo(dm0,&(info)));
 
     PetscReal  h = 1.0 / (info.mx-1), x, R;
@@ -193,32 +206,41 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
 
     PetscCall(DMGetLocalVector(dm0,&sol_local));
     PetscCall(DMGlobalToLocal(dm0,user->sol,INSERT_VALUES,sol_local));
-    PetscCall(VecGetArray(sol_local,&sol_vec));
+    PetscCall(DMDAVecGetArray(dm0,sol_local,&sol_vec));
 
-    for (int ix = info.xs; ix <= info.xs+info.mx-1; ix += 1)
+
+    PetscInt    xs, xm;
+    PetscCall(DMDAGetCorners(dm0, &xs, NULL, NULL, &xm, NULL, NULL));
+
+    PetscInt Mx;
+    PetscCall(DMDAGetInfo(dm0, PETSC_IGNORE, &Mx, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE));
+
+    for (int ix = xs; ix < xs+xm; ix++)
     {
-        dRdu = (- (user->rho / 2.0) / PetscSqrtReal(sol_vec[ix+1]))*h*h;
+        dRdu = (- (user->rho / 2.0) / PetscSqrtReal(sol_vec[ix]))*h*h;
 
         if (ix == 0) {
-            y_u_vec[ix + 1] = x_u_vec[ix + 1];
+            y_u_vec[ix] = x_u_vec[ix];
         }
-        else if (ix == info.mx-1){
-            y_u_vec[ix + 1] =  x_u_vec[ix + 1];
+        else if (ix == Mx-1){
+            y_u_vec[ix] =  x_u_vec[ix];
         }
         else if (ix == 1){
-            y_u_vec[ix + 1] = - x_u_vec[ix + 2] + (2.0 - dRdu) * x_u_vec[ix + 1];
+            y_u_vec[ix] = - x_u_vec[ix + 1] + (2.0 - dRdu) * x_u_vec[ix];
+    
         }
-        else if (ix == info.mx-2){
-            y_u_vec[ix + 1] =  (2.0 - dRdu) * x_u_vec[ix + 1] - x_u_vec[ix];
+        else if (ix == Mx-2){
+            y_u_vec[ix] = (2.0 - dRdu) * x_u_vec[ix] - x_u_vec[ix-1];
         }
         else {
-            y_u_vec[ix + 1] = - x_u_vec[ix + 2] + (2.0 - dRdu) * x_u_vec[ix + 1] - x_u_vec[ix];
-
+            y_u_vec[ix] = - x_u_vec[ix + 1] + (2.0 - dRdu) * x_u_vec[ix] - x_u_vec[ix-1];
         }
     }
-    PetscCall(VecRestoreArray(sol_local,&sol_vec));
-    PetscCall(VecRestoreArray(yloc,&y_u_vec));
-    PetscCall(VecRestoreArray(xloc,&x_u_vec));
+
+    PetscCall(DMDAVecRestoreArray(dm0,sol_local,&sol_vec));
+    PetscCall(DMDAVecRestoreArray(dm0,yloc,&y_u_vec));
+
+    PetscCall(DMDAVecRestoreArray(dm0,xloc,&x_u_vec));
     PetscCall(DMLocalToGlobalBegin(dm0,yloc,INSERT_VALUES,Y));
     PetscCall(DMLocalToGlobalEnd(dm0,yloc,INSERT_VALUES,Y));
     PetscCall(DMRestoreLocalVector(dm0,&(xloc)));
