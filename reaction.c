@@ -138,6 +138,8 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
 
     PetscCall(DMGetApplicationContext(da, &user));
 
+    // Note, in Devito we would just use VecGetArray with subdomains to generate the appropriate
+    // loop bounds for BCs on each rank
     PetscCall(DMDAVecGetArrayRead(da, xlocal, &x_vec));
     PetscCall(DMDAVecGetArray(da, F, &f_vec));
 
