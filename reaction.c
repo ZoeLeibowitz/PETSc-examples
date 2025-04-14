@@ -3,11 +3,7 @@ static char help[] = "1D reaction-diffusion problem with DMDA and SNES.  Option 
 // with a hand-written jacobian
 
 
-
-// # Non linear example 
-// can test with devito
-
-// mpiexec -n 2 ./reaction2 -snes_converged_reason -ksp_converged_reason -ksp_type cg -da_refine 7
+// mpiexec -n 1 ./reaction -snes_converged_reason -ksp_converged_reason -ksp_type cg
 
 #include <petsc.h>
 #include <petscsnes.h>
@@ -25,7 +21,7 @@ extern PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy);
 extern PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y);
 extern PetscErrorCode FormFunctionLocal(DMDALocalInfo*, PetscReal*, PetscReal*, AppCtx*);
 
-//STARTMAIN
+
 int main(int argc,char **args) {
   DM            da;
   SNES          snes;
@@ -74,7 +70,6 @@ int main(int argc,char **args) {
   PetscCall(DMDAVecRestoreArray(da,u,&au));
   PetscCall(DMDAVecRestoreArray(da,uexact,&auex));
   PetscCall(MatSetDM(J,da));
-
   PetscCall(SNESSetFromOptions(snes));
 
   PetscCall(SNESSolve(snes,NULL,u));
@@ -113,13 +108,14 @@ PetscErrorCode InitialAndExact(DMDALocalInfo *info, PetscReal *u0,
 PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
 {
     PetscFunctionBeginUser;
-    Vec flocal, xlocal;
+    Vec xlocal;
     PetscScalar * f_vec;
     PetscScalar * x_vec;
     DM da;
     PetscInt   i;
     DMDALocalInfo info;
     AppCtx *user;
+    PetscInt xs, xm, Mx;
 
     PetscCall(SNESGetDM(snes, &da));
     PetscCall(DMDAGetLocalInfo(da, &info));
@@ -130,16 +126,11 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscCall(DMGlobalToLocalBegin(da, X, INSERT_VALUES, xlocal));
     PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xlocal));
 
-    PetscInt xs, xm;
     PetscCall(DMDAGetCorners(da, &xs, NULL, NULL, &xm, NULL, NULL));
-
-    PetscInt Mx;
     PetscCall(DMDAGetInfo(da, PETSC_IGNORE, &Mx, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE));
 
     PetscCall(DMGetApplicationContext(da, &user));
 
-    // Note, in Devito we would just use VecGetArray with subdomains to generate the appropriate
-    // loop bounds for BCs on each rank
     PetscCall(DMDAVecGetArrayRead(da, xlocal, &x_vec));
     PetscCall(DMDAVecGetArray(da, F, &f_vec));
 
@@ -183,10 +174,9 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
     Vec xloc;
     Vec yloc;
     AppCtx *user;
-    SNES snes;
-    PetscReal dRdu;
-
+    PetscReal dRdu, h;
     Vec sol_local;
+    PetscInt    xs, xm, Mx;
 
     PetscScalar * x_u_vec;
     PetscScalar * y_u_vec;
@@ -203,18 +193,14 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
     PetscCall(DMDAVecGetArray(dm0,xloc,&x_u_vec));
     PetscCall(DMDAGetLocalInfo(dm0,&(info)));
 
-    PetscReal  h = 1.0 / (info.mx-1), x, R;
+    h = 1.0 / (info.mx-1);
     PetscCall(DMGetApplicationContext(dm0,&(user)));
 
     PetscCall(DMGetLocalVector(dm0,&sol_local));
     PetscCall(DMGlobalToLocal(dm0,user->sol,INSERT_VALUES,sol_local));
     PetscCall(DMDAVecGetArray(dm0,sol_local,&sol_vec));
-
-
-    PetscInt    xs, xm;
     PetscCall(DMDAGetCorners(dm0, &xs, NULL, NULL, &xm, NULL, NULL));
 
-    PetscInt Mx;
     PetscCall(DMDAGetInfo(dm0, PETSC_IGNORE, &Mx, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE));
 
     for (int ix = xs; ix < xs+xm; ix++)
