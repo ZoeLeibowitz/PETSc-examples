@@ -46,6 +46,9 @@ int main(int argc,char **args) {
   PetscCall(DMDAVecRestoreArray(da,phi,&aphi));
   PetscCall(DMDAVecRestoreArray(da,phiexact,&aphiex));
 
+  PetscCall(VecView(phiexact,PETSC_VIEWER_STDOUT_WORLD));
+  PetscCall(VecView(phi,PETSC_VIEWER_STDOUT_WORLD));
+
   PetscCall(SNESCreate(PETSC_COMM_WORLD,&snes));
   PetscCall(SNESSetDM(snes,da));
   PetscCall(DMDASNESSetFunctionLocal(da,INSERT_VALUES,
@@ -56,7 +59,7 @@ int main(int argc,char **args) {
   PetscCall(SNESSetFromOptions(snes));
 
   PetscCall(SNESSolve(snes,NULL,phi));
-  PetscCall(VecView(phi, PETSC_VIEWER_STDOUT_WORLD));
+//   PetscCall(VecView(phi, PETSC_VIEWER_STDOUT_WORLD));
   PetscCall(VecAXPY(phi,-1.0,phiexact));    // phi <- phi + (-1.0) uexact
   PetscCall(VecNorm(phi,NORM_INFINITY,&errnorm));
 
