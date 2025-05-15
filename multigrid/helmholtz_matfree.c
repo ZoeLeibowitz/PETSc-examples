@@ -34,7 +34,7 @@ int main(int argc,char **args) {
   user.alpha = 0.;
   user.beta  = 1.;
 
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_GHOSTED,257,1,1,NULL,&da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,257,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
 
@@ -108,7 +108,7 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscInt   i;
     DMDALocalInfo info;
     AppCtx *user;
-    PetscInt xs, xm, Mx;
+    PetscInt xs, xm;
 
     PetscCall(SNESGetDM(snes, &da));
     PetscCall(DMDAGetLocalInfo(da, &info));
@@ -120,8 +120,6 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscCall(DMGlobalToLocalEnd(da, X, INSERT_VALUES, xlocal));
 
     PetscCall(DMDAGetCorners(da, &xs, NULL, NULL, &xm, NULL, NULL));
-    PetscCall(DMDAGetInfo(da, PETSC_IGNORE, &Mx, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE));
-
     PetscCall(DMGetApplicationContext(da, &user));
 
     PetscCall(DMDAVecGetArrayRead(da, xlocal, &x_vec));
@@ -131,15 +129,14 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
         if (i==0){
             f_vec[i] = x_vec[i] - user->alpha;
         }
-
-        else if (i==Mx-1){
+        else if (i==info.mx-1){
             f_vec[i] = x_vec[i] - user->beta;
         }
         else{
             if (i==1){
                 f_vec[i] = - x_vec[i+1] + 2.0 * x_vec[i] - user->alpha;
             }
-            else if (i==Mx-2){
+            else if (i==info.mx-2){
                 f_vec[i] = - user->beta + 2.0 * x_vec[i] - x_vec[i-1];
             }
             else{
@@ -168,7 +165,7 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
     Vec yloc;
     AppCtx *user;
     PetscReal dRdphi, h;
-    PetscInt    xs, xm, Mx;
+    PetscInt    xs, xm;
 
     PetscScalar * x_u_vec;
     PetscScalar * y_u_vec;
@@ -189,8 +186,6 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
 
     PetscCall(DMDAGetCorners(dm0, &xs, NULL, NULL, &xm, NULL, NULL));
 
-    PetscCall(DMDAGetInfo(dm0, PETSC_IGNORE, &Mx, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE));
-
     for (int ix = xs; ix < xs+xm; ix++)
     {
         dRdphi = (-1.0)*h*h;
@@ -198,14 +193,14 @@ PetscErrorCode FormJacobian(Mat J, Vec X, Vec Y)
         if (ix == 0) {
             y_u_vec[ix] = x_u_vec[ix];
         }
-        else if (ix == Mx-1){
+        else if (ix == info.mx-1){
             y_u_vec[ix] =  x_u_vec[ix];
         }
         else if (ix == 1){
             y_u_vec[ix] = - x_u_vec[ix + 1] + (2.0 - dRdphi) * x_u_vec[ix];
     
         }
-        else if (ix == Mx-2){
+        else if (ix == info.mx-2){
             y_u_vec[ix] = (2.0 - dRdphi) * x_u_vec[ix] - x_u_vec[ix-1];
         }
         else {
