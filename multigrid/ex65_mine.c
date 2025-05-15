@@ -42,6 +42,8 @@ static PetscErrorCode MyDMShellCreate(MPI_Comm comm, DM da, PetscInt level, DM *
   // I think potentially, instead of just setting the context as the level,
   // this would acc be where we createapplicationcontext for the level
   // via a callback function 
+  //print level to screen
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD, "level = %d\n", level));
   PetscCall(DMSetApplicationContext(*shell, (void *)(size_t)level));
 
   PetscCall(DMShellSetCreateMatrix(*shell, CreateMatrix));
@@ -64,8 +66,8 @@ int main(int argc, char **argv)
   PetscFunctionBeginUser;
   PetscCall(PetscInitialize(&argc, &argv, NULL, help));
   PetscCall(KSPCreate(PETSC_COMM_WORLD, &ksp));
+  // PetscCall(DMDACreate1d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, 17, 1, 1, 0, &da));
   PetscCall(DMDACreate1d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, 5, 1, 1, 0, &da));
-  // PetscCall(DMDACreate1d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, 513, 1, 1, 0, &da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(MyDMShellCreate(PETSC_COMM_WORLD, da, 0, &shell));
@@ -112,14 +114,18 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
   PetscCall(DMShellGetContext(dm2, &da2));
   PetscCall(DMGetApplicationContext(dm2, (void **)&level));
 
+  // PetscCall(PetscPrintf(PETSC_COMM_WORLD, "level = %d\n", level));
+
   if (level == 0) {
     // print PetscInt level to screen
     // PetscCall(PetscPrintf(PETSC_COMM_WORLD, "level = %d\n", level));
     PetscCall(DMCreateInterpolation(da1, da2, mat, vec));
+    // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
   }
   else {
-    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "level = %d\n", level));
+    // PetscCall(PetscPrintf(PETSC_COMM_WORLD, "level = %d\n", level));
     PetscCall(DMCreateInterpolation(da1, da2, mat, vec));
+    // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
   }
 
   PetscFunctionReturn(PETSC_SUCCESS);
@@ -173,6 +179,8 @@ static PetscErrorCode Refine(DM shell, MPI_Comm comm, DM *dmnew)
   PetscCall(DMRefine(da, comm, &dafine));
   PetscCall(DMGetApplicationContext(shell, (void **)&level));
 //   PetscCall(MyDMShellCreate(comm, dafine, level + 1, dmnew));
+
+  PetscCall(PetscPrintf(PETSC_COMM_WORLD, "level = %d\n", level));
 
   PetscCall(MyDMShellCreate(PetscObjectComm((PetscObject)shell), dafine, level+1, dmnew));
   PetscFunctionReturn(PETSC_SUCCESS);

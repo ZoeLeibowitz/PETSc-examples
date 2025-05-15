@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 
 # ./helmholtz -ksp_converged_reason -ksp_view -pc_type none -ksp_rtol 1e-10
 
-dx = np.array([1/32, 1/64, 1/128, 1/256])  # grid spacings
-errors = np.array([0.00963906, 0.00240207, 0.000600039, 0.00014998])
+dx = np.array([1/8, 1/16, 1/32, 1/64, 1/128, 1/256])  # grid spacings
+errors = np.array([0.146125, 0.0390549, 0.00963906, 0.00240207, 0.000600039, 0.00014998])
 
 n_ksp_iters = []
 

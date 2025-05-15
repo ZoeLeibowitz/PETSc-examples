@@ -58,7 +58,7 @@ int main(int argc, char **argv)
   PetscFunctionBeginUser;
   PetscCall(PetscInitialize(&argc, &argv, NULL, help));
   PetscCall(KSPCreate(PETSC_COMM_WORLD, &ksp));
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, 129, 1, 1, 0, &da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE, 5, 1, 1, 0, &da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(MyDMShellCreate(PETSC_COMM_WORLD, da, &shell));
@@ -103,6 +103,8 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
   PetscCall(DMShellGetContext(dm1, &da1));
   PetscCall(DMShellGetContext(dm2, &da2));
   PetscCall(DMCreateInterpolation(da1, da2, mat, vec));
+  PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
+  // PetscCall(VecView(*vec, PETSC_VIEWER_STDOUT_WORLD));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
