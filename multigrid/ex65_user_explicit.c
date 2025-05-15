@@ -121,15 +121,12 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
 
   PetscFunctionBeginUser;
 
-  // Retrieve the underlying DMDAs from the DMShell contexts
-  PetscCall(DMShellGetContext(dm1, &da1)); // coarse DMDA
-  PetscCall(DMShellGetContext(dm2, &da2)); // fine DMDA
+  PetscCall(DMShellGetContext(dm1, &da1)); // coarse 
+  PetscCall(DMShellGetContext(dm2, &da2)); // fine 
 
-  // Get global sizes of coarse and fine grids
   PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
   PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
 
-  // Create a sequential AIJ matrix (assuming single-rank for simplicity)
   PetscCall(MatCreateSeqAIJ(PETSC_COMM_SELF, M2, M1, 2, NULL, mat));
 
   // Build the interpolation matrix explicitly
@@ -153,14 +150,11 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
     }
   }
 
-  // Finalize matrix assembly
   PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
   PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
 
-  // Optional: Create interpolation scaling vector (used in multigrid setup)
   PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
 
-  // Optional: view the matrix
   PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
 
   PetscFunctionReturn(PETSC_SUCCESS);
