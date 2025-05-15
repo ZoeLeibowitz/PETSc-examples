@@ -1,4 +1,4 @@
-static char help[] = "1D modified helmholtz problem with DMDA and SNES. No multigrid. Option prefix -rct_.\n\n";
+static char help[] = "1D modified helmholtz problem with DMDA and SNES. Multigrid. Option prefix -rct_.\n\n";
 
 #include <petsc.h>
 
