@@ -172,7 +172,6 @@ static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
 {
   DM  da1, da2;
   Mat tmat;
-
   PetscFunctionBeginUser;
   PetscCall(DMShellGetContext(dm1, &da1));
   PetscCall(DMShellGetContext(dm2, &da2));
