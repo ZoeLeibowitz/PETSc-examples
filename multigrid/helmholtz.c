@@ -31,7 +31,7 @@ int main(int argc,char **args) {
   user.alpha = 0.;
   user.beta  = 1.;
 
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,257,1,1,NULL,&da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,9,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(DMSetApplicationContext(da,&user));
@@ -45,9 +45,6 @@ int main(int argc,char **args) {
   PetscCall(InitialAndExact(&info,aphi,aphiex,&user));
   PetscCall(DMDAVecRestoreArray(da,phi,&aphi));
   PetscCall(DMDAVecRestoreArray(da,phiexact,&aphiex));
-
-  PetscCall(VecView(phiexact,PETSC_VIEWER_STDOUT_WORLD));
-  PetscCall(VecView(phi,PETSC_VIEWER_STDOUT_WORLD));
 
   PetscCall(SNESCreate(PETSC_COMM_WORLD,&snes));
   PetscCall(SNESSetDM(snes,da));
@@ -85,8 +82,8 @@ PetscErrorCode InitialAndExact(DMDALocalInfo *info, PetscReal *u0,
     PetscReal  h = 1.0 / (info->mx-1), x;
     for (i=info->xs; i<info->xs+info->xm; i++) {
         x = h * i;
-        // initial guess is just linear interpolation
-        // between grid points
+        // initial guess
+        // linear inteprolation of grid points
         u0[i] = user->alpha + (user->beta - user->alpha) * x;
         uex[i] = 1.0 - (x * x) - PetscCosReal(3.0*PETSC_PI * x);
 
@@ -100,9 +97,9 @@ PetscErrorCode FormFunctionLocal(DMDALocalInfo *info, PetscReal *phi,
     PetscReal  h = 1.0 / (info->mx-1), x, R;
     for (i=info->xs; i<info->xs+info->xm; i++) {
         if (i == 0) {
-            FF[i] = (phi[i] - user->alpha);
+            FF[i] = (phi[i] - user->alpha)*(2.0 + h*h);
         } else if (i == info->mx-1) {
-            FF[i] = (phi[i] - user->beta);
+            FF[i] = (phi[i] - user->beta)*(2.0 + h*h);
         } else {  // interior location
             if (i == 1) {
                 FF[i] = - phi[i+1] + 2.0 * phi[i] - user->alpha;
@@ -125,7 +122,8 @@ PetscErrorCode FormJacobianLocal(DMDALocalInfo *info, PetscReal *phi,
     PetscReal  h = 1.0 / (info->mx-1), dRdphi, v[3];
     for (i=info->xs; i<info->xs+info->xm; i++) {
         if ((i == 0) | (i == info->mx-1)) {
-            v[0] = 1.0;
+            // v[0] = 1.0;
+            v[0] = 2.0 + h*h;
             PetscCall(MatSetValues(P,1,&i,1,&i,v,INSERT_VALUES));
         } else {
             col[0] = i;

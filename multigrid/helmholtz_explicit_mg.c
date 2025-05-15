@@ -9,6 +9,13 @@ typedef struct {
     PetscReal  alpha, beta;
 } AppCtx;
 
+// run with mpiexec -n 1 ./helmholtz_explicit_mg -ksp_converged_reason -ksp_view -pc_type mg -ksp_rtol 1e-10 -da_refine 2
+
+
+// preconditioner as a solver:
+// ./helmholtz_explicit_mg -ksp_monitor -pc_type mg -pc_mg_type full -da_refine 4 -ksp_type preonly -mg_levels_ksp_max_it 10 -mg_levels_pc_type jacobi -mg_levels_ksp_type richardson -ksp_converged_reason -mg_levels_4_pc_type lu -mg_levels_4_ksp_type richardson
+
+
 extern PetscReal f_source(PetscReal);
 extern PetscErrorCode InitialAndExact(DMDALocalInfo*, PetscReal*, PetscReal*, AppCtx*);
 extern PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy);
@@ -52,6 +59,7 @@ static PetscErrorCode MyDMShellCreate(MPI_Comm comm, DM da, DM *shell)
 
   PetscCall(DMDAGetScatter(da, &da_gtol, NULL));
   PetscCall(DMShellSetGlobalToLocalVecScatter(*shell, da_gtol));
+
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
@@ -64,12 +72,13 @@ int main(int argc,char **args) {
   Vec           phi, phiexact;
   PetscReal     errnorm, *aphi, *aphiex;
   DMDALocalInfo info;
+  PetscInt levels;
 
   PetscCall(PetscInitialize(&argc,&args,NULL,help));
   user.alpha = 0.;
   user.beta  = 1.;
 
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,33,1,1,NULL,&da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,9,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(DMSetApplicationContext(da,&user));
@@ -84,8 +93,11 @@ int main(int argc,char **args) {
   PetscCall(DMDAVecRestoreArray(da,phi,&aphi));
   PetscCall(DMDAVecRestoreArray(da,phiexact,&aphiex));
 
-  // shell stuff
+  // Shell stuff
   PetscCall(MyDMShellCreate(PETSC_COMM_WORLD, da, &shell));
+
+  PetscCall(DMGetRefineLevel(da, &levels));
+  PetscCall(DMSetRefineLevel(shell, levels));
 
   PetscCall(SNESCreate(PETSC_COMM_WORLD,&snes));
   PetscCall(SNESSetDM(snes,shell));
@@ -98,7 +110,7 @@ int main(int argc,char **args) {
   PetscCall(SNESSetFromOptions(snes));
 
   PetscCall(SNESSolve(snes,NULL,phi));
-
+//   PetscCall(VecView(phi, PETSC_VIEWER_STDOUT_WORLD));
   PetscCall(VecAXPY(phi,-1.0,phiexact));    // phi <- phi + (-1.0) uexact
   PetscCall(VecNorm(phi,NORM_INFINITY,&errnorm));
 
@@ -108,7 +120,6 @@ int main(int argc,char **args) {
   PetscCall(VecDestroy(&phi));
   PetscCall(VecDestroy(&phiexact));
   PetscCall(SNESDestroy(&snes));
-//   PetscCall(DMDestroy(&da));
   PetscCall(DMDestroy(&shell));
   PetscCall(PetscFinalize());
   return 0;
@@ -162,13 +173,19 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscCall(DMGetApplicationContext(da, &user));
 
     PetscCall(DMDAVecGetArrayRead(da, xlocal, &x_vec));
+
     PetscCall(DMDAVecGetArray(da, F, &f_vec));
+    
+    // print info.xs
+    PetscCall(PetscPrintf(PETSC_COMM_WORLD, "info.xs = %d\n", info.xm));
 
     for (i=info.xs; i<info.xs+info.xm; i++) {
         if (i == 0) {
-            f_vec[i] = (x_vec[i] - user->alpha);
+            // f_vec[i] = (x_vec[i] - user->alpha);
+            f_vec[i] = 0.0;
         } else if (i == info.mx-1) {
-            f_vec[i] = (x_vec[i] - user->beta);
+            // f_vec[i] = (x_vec[i] - user->beta);
+            f_vec[i] = 0.0;
         } else {  // interior location
             if (i == 1) {
                 f_vec[i] = - x_vec[i+1] + 2.0 * x_vec[i] - user->alpha;
@@ -186,6 +203,8 @@ PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy)
     PetscCall(DMDAVecRestoreArrayRead(da, xlocal, &x_vec));
     PetscCall(DMDAVecRestoreArray(da, F, &f_vec));
     PetscCall(DMRestoreLocalVector(da, &xlocal));
+    // view F
+
     PetscFunctionReturn(0);
 }
 
@@ -249,16 +268,66 @@ static PetscErrorCode CreateMatrix(DM shell, Mat *A)
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
+
+// static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
+// {
+//   DM da1, da2;
+
+//   PetscFunctionBeginUser;
+//   PetscCall(DMShellGetContext(dm1, &da1));
+//   PetscCall(DMShellGetContext(dm2, &da2));
+//   PetscCall(DMCreateInterpolation(da1, da2, mat, vec));
+//   //view mat
+//   PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
+//   PetscFunctionReturn(PETSC_SUCCESS);
+// }
+
+
 static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
 {
-  DM da1, da2;
+  DM             da1, da2;
+  PetscInt       i, M1, M2; // Sizes of coarse and fine grids
+  PetscInt       col, cols[2];
+  PetscScalar    vals[2];
 
   PetscFunctionBeginUser;
-  PetscCall(DMShellGetContext(dm1, &da1));
-  PetscCall(DMShellGetContext(dm2, &da2));
-  PetscCall(DMCreateInterpolation(da1, da2, mat, vec));
+
+  PetscCall(DMShellGetContext(dm1, &da1)); // coarse 
+  PetscCall(DMShellGetContext(dm2, &da2)); // fine 
+
+  PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+  PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+
+  PetscCall(MatCreateSeqAIJ(PETSC_COMM_SELF, M2, M1, 2, NULL, mat));
+
+  // Build the interpolation matrix explicitly
+  for (i = 0; i < M2; ++i) {
+    if (i % 2 == 0) {
+      // Fine point coincides with coarse point
+      col = i / 2;
+      if (col < M1) {
+        PetscCall(MatSetValue(*mat, i, col, 1.0, INSERT_VALUES));
+      }
+    } else {
+      // Fine point between two coarse points
+      col = (i - 1) / 2;
+      if (col + 1 < M1) {
+        cols[0] = col;
+        cols[1] = col + 1;
+        vals[0] = 0.5;
+        vals[1] = 0.5;
+        PetscCall(MatSetValues(*mat, 1, &i, 2, cols, vals, INSERT_VALUES));
+      }
+    }
+  }
+
+  PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
+  PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
+
+  PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
+
   PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
-  // PetscCall(VecView(*vec, PETSC_VIEWER_STDOUT_WORLD));
+
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
