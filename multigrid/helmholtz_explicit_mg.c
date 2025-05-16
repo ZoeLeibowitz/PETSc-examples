@@ -108,7 +108,7 @@ int main(int argc,char **args) {
   PetscCall(SNESSetFromOptions(snes));
 
   PetscCall(SNESSolve(snes,NULL,phi));
-  PetscCall(VecView(phi,PETSC_VIEWER_STDOUT_WORLD));
+
   PetscCall(VecAXPY(phi,-1.0,phiexact));    // phi <- phi + (-1.0) uexact
   PetscCall(VecNorm(phi,NORM_INFINITY,&errnorm));
 
@@ -275,7 +275,6 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
 
   PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
   PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
-
   PetscCall(MatCreateSeqAIJ(PETSC_COMM_SELF, M2, M1, 2, NULL, mat));
 
   for (i = 0; i < M2; ++i) {
@@ -301,7 +300,7 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
 
   PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
 
-  PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
+  // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
 
   PetscFunctionReturn(PETSC_SUCCESS);
 }
