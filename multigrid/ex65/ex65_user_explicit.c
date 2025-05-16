@@ -115,30 +115,26 @@ static PetscErrorCode CreateMatrix(DM shell, Mat *A)
 static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
 {
   DM             da1, da2;
-  PetscInt       i, M1, M2; // Sizes of coarse and fine grids
+  PetscInt       i, M1, M2;
   PetscInt       col, cols[2];
   PetscScalar    vals[2];
 
   PetscFunctionBeginUser;
 
-  PetscCall(DMShellGetContext(dm1, &da1)); // coarse 
-  PetscCall(DMShellGetContext(dm2, &da2)); // fine 
-
+  PetscCall(DMShellGetContext(dm1, &da1));
+  PetscCall(DMShellGetContext(dm2, &da2));
   PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
   PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
 
   PetscCall(MatCreateSeqAIJ(PETSC_COMM_SELF, M2, M1, 2, NULL, mat));
 
-  // Build the interpolation matrix explicitly
   for (i = 0; i < M2; ++i) {
     if (i % 2 == 0) {
-      // Fine point coincides with coarse point
       col = i / 2;
       if (col < M1) {
         PetscCall(MatSetValue(*mat, i, col, 1.0, INSERT_VALUES));
       }
     } else {
-      // Fine point between two coarse points
       col = (i - 1) / 2;
       if (col + 1 < M1) {
         cols[0] = col;
@@ -149,14 +145,11 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
       }
     }
   }
-
   PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
   PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
 
   PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
-
-  PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
-
+  // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
