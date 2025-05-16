@@ -10,6 +10,7 @@ dx = np.array([1/8, 1/16, 1/32, 1/64, 1/128, 1/256])  # grid spacings
 errors_helmholtz = np.array([0.146125, 0.0390549, 0.00963906, 0.00240207, 0.000600039, 0.00014998])
 errors_helmholtz_matfree = np.array([0.146125, 0.0390549, 0.00963906, 0.00240207, 0.000600039, 0.00014998])
 
+
 n_ksp_iters = []
 
 slope, intercept = np.polyfit(np.log(dx), np.log(errors_helmholtz), 1)

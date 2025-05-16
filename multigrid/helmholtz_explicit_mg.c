@@ -77,7 +77,7 @@ int main(int argc,char **args) {
   user.alpha = 0.;
   user.beta  = 1.;
 
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,5,1,1,NULL,&da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,9,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(DMSetApplicationContext(da,&user));
@@ -344,21 +344,6 @@ static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
 
   //view the mat
   PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
-  PetscFunctionReturn(PETSC_SUCCESS);
-}
-
-
-static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
-{
-  DM  da1, da2;
-  Mat tmat;
-  PetscFunctionBeginUser;
-  PetscCall(DMShellGetContext(dm1, &da1));
-  PetscCall(DMShellGetContext(dm2, &da2));
-  PetscCall(DMCreateInterpolation(da1, da2, &tmat, NULL));
-  PetscCall(MatTranspose(tmat, MAT_INITIAL_MATRIX, mat));
-  // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
-  PetscCall(MatDestroy(&tmat));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
