@@ -77,7 +77,7 @@ int main(int argc,char **args) {
   user.alpha = 0.;
   user.beta  = 1.;
 
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,9,1,1,NULL,&da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,5,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(DMSetApplicationContext(da,&user));
@@ -299,22 +299,65 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
   PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
 
   PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
-
-  // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
-
+  PetscCall(VecView(*vec, PETSC_VIEWER_STDOUT_WORLD));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
+
+
+static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
+{
+  DM             da1, da2;
+  PetscInt       i, M1, M2;
+  PetscInt       row, rows[2];
+  PetscScalar    vals[2];
+
+  PetscFunctionBeginUser;
+
+  PetscCall(DMShellGetContext(dm1, &da1));
+  PetscCall(DMShellGetContext(dm2, &da2));
+
+  PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+  PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+
+  PetscCall(MatCreateSeqAIJ(PETSC_COMM_SELF, M1, M2, 3, NULL, mat));
+
+  for (i = 0; i < M2; ++i) {
+    if (i % 2 == 0) {
+      row = i / 2;
+      if (row < M1) {
+        PetscCall(MatSetValue(*mat, row, i, 1.0, INSERT_VALUES));
+      }
+    } else {
+      row = (i - 1) / 2;
+      if (row + 1 < M1) {
+        rows[0] = row;
+        rows[1] = row + 1;
+        vals[0] = 0.5;
+        vals[1] = 0.5;
+        PetscCall(MatSetValues(*mat, 2, rows, 1, &i, vals, INSERT_VALUES));
+      }
+    }
+  }
+
+  PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
+  PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
+
+  //view the mat
+  PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
+  PetscFunctionReturn(PETSC_SUCCESS);
+}
+
 
 static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
 {
   DM  da1, da2;
   Mat tmat;
-
   PetscFunctionBeginUser;
   PetscCall(DMShellGetContext(dm1, &da1));
   PetscCall(DMShellGetContext(dm2, &da2));
   PetscCall(DMCreateInterpolation(da1, da2, &tmat, NULL));
   PetscCall(MatTranspose(tmat, MAT_INITIAL_MATRIX, mat));
+  // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
   PetscCall(MatDestroy(&tmat));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
