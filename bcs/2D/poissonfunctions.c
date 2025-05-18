@@ -1,6 +1,5 @@
 // ED BUELER - Petsc4pdes
 
-
 #include <petsc.h>
 #include "poissonfunctions.h"
 
@@ -88,90 +87,29 @@ PetscErrorCode Poisson2DJacobianLocal(DMDALocalInfo *info, PetscScalar **au,
     return 0;
 }
 
-PetscErrorCode InitialState(DM da, InitialType it, PetscBool gbdry,
+PetscErrorCode InitialState(DM da, PetscBool gbdry,
                             Vec u, PoissonCtx *user) {
     DMDALocalInfo  info;
-    PetscRandom    rctx;
-    switch (it) {
-        case ZEROS:
-            PetscCall(VecSet(u,0.0));
-            break;
-        case RANDOM:
-            PetscCall(PetscRandomCreate(PETSC_COMM_WORLD,&rctx));
-            PetscCall(VecSetRandom(u,rctx));
-            PetscCall(PetscRandomDestroy(&rctx));
-            break;
-        default:
-            SETERRQ(PETSC_COMM_SELF,4,"invalid InitialType ... how did I get here?\n");
-    }
-    if (!gbdry) {
-        return 0;
-    }
+    
+    // Initial zeros
+    PetscCall(VecSet(u,0.0));
+
     PetscCall(DMDAGetLocalInfo(da,&info));
-    switch (info.dim) {
-        case 1:
-        {
-            PetscInt  i;
-            PetscReal xmax[1], xmin[1], h, x, *au;
-            PetscCall(DMDAVecGetArray(da, u, &au));
-            PetscCall(DMGetBoundingBox(da,xmin,xmax));
-            h = (xmax[0] - xmin[0]) / (info.mx - 1);
-            for (i = info.xs; i < info.xs + info.xm; i++) {
-                if (i==0 || i==info.mx-1) {
-                    x = xmin[0] + i * h;
-                    au[i] = user->g_bdry(x,0.0,0.0,user);
-                }
+    PetscInt   i, j;
+    PetscReal  xymin[2], xymax[2], hx, hy, x, y, **au;
+    PetscCall(DMDAVecGetArray(da, u, &au));
+    PetscCall(DMGetBoundingBox(da,xymin,xymax));
+    hx = (xymax[0] - xymin[0]) / (info.mx - 1);
+    hy = (xymax[1] - xymin[1]) / (info.my - 1);
+    for (j = info.ys; j < info.ys + info.ym; j++) {
+        y = xymin[1] + j * hy;
+        for (i = info.xs; i < info.xs + info.xm; i++) {
+            if (i==0 || i==info.mx-1 || j==0 || j==info.my-1) {
+                x = xymin[0] + i * hx;
+                au[j][i] = user->g_bdry(x,y,0.0,user);
             }
-            PetscCall(DMDAVecRestoreArray(da, u, &au));
-            break;
         }
-        case 2:
-        {
-            PetscInt   i, j;
-            PetscReal  xymin[2], xymax[2], hx, hy, x, y, **au;
-            PetscCall(DMDAVecGetArray(da, u, &au));
-            PetscCall(DMGetBoundingBox(da,xymin,xymax));
-            hx = (xymax[0] - xymin[0]) / (info.mx - 1);
-            hy = (xymax[1] - xymin[1]) / (info.my - 1);
-            for (j = info.ys; j < info.ys + info.ym; j++) {
-                y = xymin[1] + j * hy;
-                for (i = info.xs; i < info.xs + info.xm; i++) {
-                    if (i==0 || i==info.mx-1 || j==0 || j==info.my-1) {
-                        x = xymin[0] + i * hx;
-                        au[j][i] = user->g_bdry(x,y,0.0,user);
-                    }
-                }
-            }
-            PetscCall(DMDAVecRestoreArray(da, u, &au));
-            break;
-        }
-        case 3:
-        {
-            PetscInt   i, j, k;
-            PetscReal  xyzmin[3], xyzmax[3], hx, hy, hz, x, y, z, ***au;
-            PetscCall(DMDAVecGetArray(da, u, &au));
-            PetscCall(DMGetBoundingBox(da,xyzmin,xyzmax));
-            hx = (xyzmax[0] - xyzmin[0]) / (info.mx - 1);
-            hy = (xyzmax[1] - xyzmin[1]) / (info.my - 1);
-            hz = (xyzmax[2] - xyzmin[2]) / (info.mz - 1);
-            for (k = info.zs; k < info.zs+info.zm; k++) {
-                z = xyzmin[2] + k * hz;
-                for (j = info.ys; j < info.ys + info.ym; j++) {
-                    y = xyzmin[1] + j * hy;
-                    for (i = info.xs; i < info.xs + info.xm; i++) {
-                        if (i==0 || i==info.mx-1 || j==0 || j==info.my-1
-                                 || k==0 || k==info.mz-1) {
-                            x = xyzmin[0] + i * hx;
-                            au[k][j][i] = user->g_bdry(x,y,z,user);
-                        }
-                    }
-                }
-            }
-            PetscCall(DMDAVecRestoreArray(da, u, &au));
-            break;
-        }
-        default:
-            SETERRQ(PETSC_COMM_SELF,5,"invalid dim from DMDALocalInfo\n");
     }
+    PetscCall(DMDAVecRestoreArray(da, u, &au));
     return 0;
 }

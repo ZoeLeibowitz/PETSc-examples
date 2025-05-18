@@ -6,7 +6,8 @@ static char help[] = "1D helmholtz problem with DMDA and SNES matfree. Multigrid
 // l=3, k=1 :
 // => phi_exact(x) = 1 - x^2 - cos(l*pi*x)
 
-
+// BROKEN
+// this is mafree jacobian and explicit
 // note: broken ./helmholtz_matfree_mg -ksp_monitor -pc_type mg -mg_levels_1_pc_type none -mg_levels_1_ksp_type gmres -mg_levels_0_pc_type none -mg_levels_0_ksp_type gmres -da_refine 1
 
 #include <petsc.h>

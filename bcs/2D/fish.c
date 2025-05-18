@@ -12,7 +12,7 @@ static char help[] =
 #include <petsc.h>
 #include "poissonfunctions.h"
 
-// exact solutions  u(x,y),  for boundary condition and error calculation
+// exact solutions  u(x,y), for boundary condition and error calculation
 
 
 static PetscReal u_exact_2Dmanupoly(PetscReal x, PetscReal y, PetscReal z, void *ctx) {
@@ -44,25 +44,13 @@ static PetscReal f_rhs_2Dmanuexp(PetscReal x, PetscReal y, PetscReal z, void *ct
 }
 
 // functions simply to put u_exact()=g_bdry() into a grid
-// these are irritatingly-dimension-dependent inside ...
 extern PetscErrorCode Form2DUExact(DMDALocalInfo*, Vec, PoissonCtx*);
-
-//STARTPTRARRAYS
-// arrays of pointers to functions
-// static DMDASNESFunctionFn* residual_ptr[1]
-//     = {(DMDASNESFunctionFn*)&Poisson2DFunctionLocal};
-
-// static DMDASNESJacobianFn* jacobian_ptr[1]
-//     = {(DMDASNESJacobianFn*)&Poisson2DJacobianLocal};
 
 static DMDASNESFunctionFn *residual_ptr = (DMDASNESFunctionFn *)&Poisson2DFunctionLocal;
     
 static DMDASNESJacobianFn* jacobian_ptr = (DMDASNESJacobianFn *)&Poisson2DJacobianLocal;
 
 typedef PetscErrorCode (*ExactFcnVec)(DMDALocalInfo*,Vec,PoissonCtx*);
-
-// static ExactFcnVec getuexact_ptr[1]
-//     = {&Form2DUExact};
 
 static ExactFcnVec getuexact_ptr = &Form2DUExact;
 
@@ -81,8 +69,6 @@ static PointwiseFcn g_bdry_ptr[1][3]
 static PointwiseFcn f_rhs_ptr[1][3]
     = {{&f_rhs_2Dmanupoly, &f_rhs_2Dmanuexp, &zero}};
 
-static const char* InitialTypes[] = {"zeros","random",
-                                     "InitialType", "", NULL};
 
 int main(int argc,char **argv) {
     DM             da, da_after;
@@ -95,64 +81,27 @@ int main(int argc,char **argv) {
     char           gridstr[99];
     ExactFcnVec    getuexact;
 
-    // fish defaults:
-    PetscInt       dim = 2;                  // 2D
+    // 2D fish:
     ProblemType    problem = MANUEXP;        // manufactured problem using exp()
-    InitialType    initial = ZEROS;          // set u=0 for initial iterate
     PetscBool      gonboundary = PETSC_TRUE; // initial iterate has u=g on boundary
 
     PetscCall(PetscInitialize(&argc,&argv,NULL,help));
 
-    // get options and configure context
     user.Lx = 1.0;
     user.Ly = 1.0;
-    user.Lz = 1.0;
+
     user.cx = 1.0;
     user.cy = 1.0;
-    user.cz = 1.0;
-    PetscOptionsBegin(PETSC_COMM_WORLD,"fsh_", "options for fish.c", "");
-    PetscCall(PetscOptionsReal("-cx",
-         "set coefficient of x term u_xx in equation",
-         "fish.c",user.cx,&user.cx,NULL));
-    PetscCall(PetscOptionsReal("-cy",
-         "set coefficient of y term u_yy in equation",
-         "fish.c",user.cy,&user.cy,NULL));
-    PetscCall(PetscOptionsReal("-cz",
-         "set coefficient of z term u_zz in equation",
-         "fish.c",user.cz,&user.cz,NULL));
-    PetscCall(PetscOptionsInt("-dim",
-         "dimension of problem (=1,2,3 only)",
-         "fish.c",dim,&dim,NULL));
-    PetscCall(PetscOptionsBool("-initial_gonboundary",
-         "set initial iterate to have correct boundary values",
-         "fish.c",gonboundary,&gonboundary,NULL));
-    PetscCall(PetscOptionsEnum("-initial_type",
-         "type of initial iterate",
-         "fish.c",InitialTypes,(PetscEnum)initial,(PetscEnum*)&initial,NULL));
-    PetscCall(PetscOptionsReal("-Lx",
-         "set Lx in domain ([0,Lx] x [0,Ly] x [0,Lz], etc.)",
-         "fish.c",user.Lx,&user.Lx,NULL));
-    PetscCall(PetscOptionsReal("-Ly",
-         "set Ly in domain ([0,Lx] x [0,Ly] x [0,Lz], etc.)",
-         "fish.c",user.Ly,&user.Ly,NULL));
-    PetscCall(PetscOptionsReal("-Lz",
-         "set Ly in domain ([0,Lx] x [0,Ly] x [0,Lz], etc.)",
-         "fish.c",user.Lz,&user.Lz,NULL));
-    PetscCall(PetscOptionsEnum("-problem",
-         "problem type; determines exact solution and RHS",
-         "fish.c",ProblemTypes,(PetscEnum)problem,(PetscEnum*)&problem,NULL));
-    PetscOptionsEnd();
+
     user.g_bdry = g_bdry_ptr[0][problem];
     user.f_rhs = f_rhs_ptr[0][problem];
 
-//STARTCREATE
-
-    PetscCall(DMDACreate2d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,DMDA_STENCIL_STAR, 3,3,PETSC_DECIDE,PETSC_DECIDE,1,1,NULL,NULL,&da));
+    PetscCall(DMDACreate2d(PETSC_COMM_WORLD, DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,DMDA_STENCIL_STAR,9,9,PETSC_DECIDE,PETSC_DECIDE,1,1,NULL,NULL,&da));
     
     PetscCall(DMSetApplicationContext(da,&user));
     PetscCall(DMSetFromOptions(da));
     PetscCall(DMSetUp(da));  // call BEFORE SetUniformCoordinates
-    PetscCall(DMDASetUniformCoordinates(da,0.0,user.Lx,0.0,user.Ly,0.0,user.Lz));
+    PetscCall(DMDASetUniformCoordinates(da,0.0,user.Lx,0.0,user.Ly,0.0,1.0));
 
     // set SNES call-backs
     PetscCall(SNESCreate(PETSC_COMM_WORLD,&snes));
@@ -160,7 +109,6 @@ int main(int argc,char **argv) {
 
     PetscCall(DMDASNESSetFunctionLocal(da, INSERT_VALUES, residual_ptr, &user));
     PetscCall(DMDASNESSetJacobianLocal(da, jacobian_ptr, &user));
-             
 
     // default to KSPONLY+CG because problem is linear and SPD
     PetscCall(SNESSetType(snes,SNESKSPONLY));
@@ -170,14 +118,12 @@ int main(int argc,char **argv) {
 
     // set initial iterate and then solve
     PetscCall(DMGetGlobalVector(da,&u_initial));
-    PetscCall(InitialState(da, initial, gonboundary, u_initial, &user));
+    PetscCall(InitialState(da, gonboundary, u_initial, &user));
     //view u_initial
     PetscCall(VecView(u_initial,PETSC_VIEWER_STDOUT_WORLD));
     PetscCall(SNESSolve(snes,NULL,u_initial));
     PetscCall(VecView(u_initial,PETSC_VIEWER_STDOUT_WORLD));
-//ENDCREATE
 
-//STARTGETSOLUTION
     // -snes_grid_sequence could change grid resolution
     PetscCall(DMRestoreGlobalVector(da,&u_initial));
     PetscCall(DMDestroy(&da));
@@ -195,8 +141,6 @@ int main(int argc,char **argv) {
     PetscCall(VecDestroy(&u_exact));      // no longer needed
     PetscCall(VecNorm(u,NORM_INFINITY,&errinf));
     PetscCall(VecNorm(u,NORM_2,&err2h));
-//ENDGETSOLUTION
-
 
     normconst2h = PetscSqrtReal((PetscReal)(info.mx-1)*(info.my-1));
     snprintf(gridstr,99,"%d x %d point 2D",info.mx,info.my);
@@ -212,7 +156,6 @@ int main(int argc,char **argv) {
     PetscCall(PetscFinalize());
     return 0;
 }
-
 
 PetscErrorCode Form2DUExact(DMDALocalInfo *info, Vec u, PoissonCtx* user) {
     PetscInt   i, j;
