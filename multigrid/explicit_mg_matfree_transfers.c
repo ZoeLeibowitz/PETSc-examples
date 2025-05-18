@@ -9,11 +9,10 @@ typedef struct {
     PetscReal  alpha, beta;
 } AppCtx;
 
-// run with mpiexec -n 1 ./helmholtz_explicit_mg -ksp_converged_reason -ksp_view -pc_type mg -ksp_rtol 1e-10 -da_refine 2
 
-
+// BROKEN PCMGSetRScale()
 // mg as a solver:
-// ./helmholtz_explicit_mg -ksp_monitor -pc_type mg -pc_mg_type full -da_refine 4 -ksp_type preonly -mg_levels_ksp_max_it 10 -mg_levels_pc_type jacobi -mg_levels_ksp_type richardson -ksp_converged_reason -mg_levels_4_pc_type lu
+// ./explicit_mg_matfree_transfers -ksp_monitor -pc_type mg -pc_mg_type full -da_refine 4 -ksp_type preonly -mg_levels_ksp_max_it 10 -mg_levels_pc_type jacobi -mg_levels_ksp_type richardson -ksp_converged_reason -mg_levels_4_pc_type lu
 
 
 extern PetscReal f_source(PetscReal);
@@ -21,7 +20,7 @@ extern PetscErrorCode InitialAndExact(DMDALocalInfo*, PetscReal*, PetscReal*, Ap
 extern PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy);
 extern PetscErrorCode FormJacobian(SNES, Vec, Mat, Mat, void *);
 
-extern PetscErrorCode InterpMult(Mat A, Vec x, Vec y);
+extern PetscErrorCode InterpMult(Mat A, Vec X, Vec Y);
 
 // shell routines
 
@@ -297,17 +296,21 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
     PetscFunctionReturn(PETSC_SUCCESS);
 }
   
-PetscErrorCode InterpMult(Mat A, Vec x, Vec y)
+PetscErrorCode InterpMult(Mat A, Vec X, Vec Y)
   {
     InterpCtx     *ctx;
     const PetscScalar *x_array;
     PetscScalar       *y_array;
     PetscInt           i;
+    Vec xlocal;
   
     PetscFunctionBeginUser;
     PetscCall(MatShellGetContext(A, &ctx));
-    PetscCall(VecGetArrayRead(x, &x_array));
-    PetscCall(VecGetArray(y, &y_array));
+    
+    // need to do a global to local for X but need the correct dm ?
+
+    PetscCall(VecGetArrayRead(X, &x_array));
+    PetscCall(VecGetArray(Y, &y_array));
   
     for (i = 0; i < ctx->M2; ++i) {
       if (i % 2 == 0) {
@@ -322,8 +325,8 @@ PetscErrorCode InterpMult(Mat A, Vec x, Vec y)
           }
           }
       }
-    PetscCall(VecRestoreArrayRead(x, &x_array));
-    PetscCall(VecRestoreArray(y, &y_array));
+    PetscCall(VecRestoreArrayRead(X, &x_array));
+    PetscCall(VecRestoreArray(Y, &y_array));
     PetscFunctionReturn(PETSC_SUCCESS);
 }
 
