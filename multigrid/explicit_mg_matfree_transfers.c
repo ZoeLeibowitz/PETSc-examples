@@ -58,6 +58,8 @@ static PetscErrorCode MyDMShellCreate(MPI_Comm comm, DM da, DM *shell)
   PetscCall(DMShellSetRefine(*shell, Refine));
   PetscCall(DMShellSetCoarsen(*shell, Coarsen));
   PetscCall(DMShellSetCreateInterpolation(*shell, CreateInterpolation));
+
+
   PetscCall(DMShellSetCreateRestriction(*shell, CreateRestriction));
   PetscCall(DMShellSetDestroyContext(*shell, Destroy));
 
