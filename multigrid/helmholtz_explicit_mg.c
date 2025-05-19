@@ -298,7 +298,7 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
   PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
   PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
 
-  PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
+  // PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
   PetscCall(VecView(*vec, PETSC_VIEWER_STDOUT_WORLD));
   PetscFunctionReturn(PETSC_SUCCESS);
 }

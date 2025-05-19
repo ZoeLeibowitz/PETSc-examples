@@ -50,7 +50,6 @@ static PetscErrorCode MyDMShellCreate(MPI_Comm comm, DM da, DM *shell)
 {
   PetscFunctionBeginUser;
   VecScatter da_gtol;
-
   PetscCall(DMShellCreate(comm, shell));
   PetscCall(DMShellSetContext(*shell, da));
   PetscCall(DMShellSetCreateMatrix(*shell, CreateMatrix));
@@ -273,6 +272,8 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
     InterpCtx *ctx;
     PetscInt  M1, M2;
   
+    Vec scale;
+
     PetscFunctionBeginUser;
   
     PetscCall(DMShellGetContext(dm1, &da1));
@@ -289,10 +290,19 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
     PetscCall(MatShellSetOperation(*mat, MATOP_MULT, (void (*)(void))InterpMult));
 
     // rethink how to do this
-    // PetscCall(VecSet(*vec, 0.5));
+    // PetscCall(VecSet(*vec, 1.0));
+
+    // PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
+
+    // PetscCall(VecCreate(PETSC_COMM_SELF, &scale));
+    // PetscCall(VecSet(scale, 1.0));
+
+
+    // PetscCall(MatRestrict(*mat, *vec, scale));
     // set first and last to 0.66667
     // PetscCall(VecSetValue(*vec, 0, 0.66667, INSERT_VALUES));
     // PetscCall(VecSetValue(*vec, M2-1, 0.66667, INSERT_VALUES));
+
     PetscFunctionReturn(PETSC_SUCCESS);
 }
   
@@ -369,8 +379,8 @@ static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
   PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
   PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
 
-  //view the mat
-  PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
+  //view the matview
+  // PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
 
