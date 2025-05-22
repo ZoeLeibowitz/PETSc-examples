@@ -88,7 +88,7 @@ int main(int argc,char **args) {
   user.alpha = 0.;
   user.beta  = 1.;
 
-  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,17,1,1,NULL,&da));
+  PetscCall(DMDACreate1d(PETSC_COMM_WORLD,DM_BOUNDARY_NONE,3,1,1,NULL,&da));
   PetscCall(DMSetFromOptions(da));
   PetscCall(DMSetUp(da));
   PetscCall(DMSetApplicationContext(da,&user));
@@ -367,12 +367,12 @@ static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
     PetscCall(MatCreateShell(PETSC_COMM_SELF, PETSC_DECIDE, PETSC_DECIDE, M1, M2, ctx, mat));
     PetscCall(MatShellSetOperation(*mat, MATOP_MULT, (void (*)(void))RestrictMult));
 
-    // Mat A_aij;
-    // MatCreate(PETSC_COMM_WORLD, &A_aij);
-    // MatSetType(A_aij, MATAIJ);
-    // MatSetSizes(A_aij, PETSC_DECIDE, PETSC_DECIDE, M1, M2);
-    // MatSetUp(A_aij);
-    // PetscCall(MatConvert(*mat, MATAIJ, MAT_INITIAL_MATRIX, &A_aij));
+    Mat A_aij;
+    MatCreate(PETSC_COMM_WORLD, &A_aij);
+    MatSetType(A_aij, MATAIJ);
+    MatSetSizes(A_aij, PETSC_DECIDE, PETSC_DECIDE, M1, M2);
+    MatSetUp(A_aij);
+    PetscCall(MatConvert(*mat, MATAIJ, MAT_INITIAL_MATRIX, &A_aij));
 
     // MatView(A_aij, PETSC_VIEWER_STDOUT_WORLD);
 
