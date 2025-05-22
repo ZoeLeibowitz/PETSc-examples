@@ -12,7 +12,7 @@ typedef struct {
 
 // BROKEN PCMGSetRScale()
 // mg as a solver:
-// ./explicit_mg_matfree_transfers -ksp_monitor -pc_type mg -pc_mg_type full -da_refine 4 -ksp_type preonly -mg_levels_ksp_max_it 10 -mg_levels_pc_type jacobi -mg_levels_ksp_type richardson -ksp_converged_reason -mg_levels_4_pc_type lu
+// ./explicit_mg_matfree_transfers -ksp_monitor -pc_type mg -pc_mg_type full -da_refine 4 -ksp_type preonly -mg_levels_ksp_max_it 10 -mg_levels_pc_type jacobi -mg_levels_ksp_type richardson -ksp_converged_reason
 
 
 extern PetscReal f_source(PetscReal);
@@ -21,6 +21,7 @@ extern PetscErrorCode FormFunction(SNES snes, Vec X, Vec F, void *dummy);
 extern PetscErrorCode FormJacobian(SNES, Vec, Mat, Mat, void *);
 
 extern PetscErrorCode InterpMult(Mat A, Vec X, Vec Y);
+extern PetscErrorCode RestrictMult(Mat A, Vec X, Vec Y);
 
 // shell routines
 
@@ -50,15 +51,18 @@ static PetscErrorCode MyDMShellCreate(MPI_Comm comm, DM da, DM *shell)
 {
   PetscFunctionBeginUser;
   VecScatter da_gtol;
-
   PetscCall(DMShellCreate(comm, shell));
   PetscCall(DMShellSetContext(*shell, da));
   PetscCall(DMShellSetCreateMatrix(*shell, CreateMatrix));
   PetscCall(DMShellSetCreateGlobalVector(*shell, CreateGlobalVector));
   PetscCall(DMShellSetCreateLocalVector(*shell, CreateLocalVector));
+
+  // PetscCall(DMShellSetMatConvert(*shell, MATSEQAIJ, MATSEQAIJ));
+
   PetscCall(DMShellSetRefine(*shell, Refine));
   PetscCall(DMShellSetCoarsen(*shell, Coarsen));
   PetscCall(DMShellSetCreateInterpolation(*shell, CreateInterpolation));
+
   PetscCall(DMShellSetCreateRestriction(*shell, CreateRestriction));
   PetscCall(DMShellSetDestroyContext(*shell, Destroy));
 
@@ -66,6 +70,7 @@ static PetscErrorCode MyDMShellCreate(MPI_Comm comm, DM da, DM *shell)
   PetscCall(DMShellSetGlobalToLocalVecScatter(*shell, da_gtol));
 
   PetscFunctionReturn(PETSC_SUCCESS);
+
 }
 
 
@@ -273,6 +278,8 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
     InterpCtx *ctx;
     PetscInt  M1, M2;
   
+    // Vec scale;
+
     PetscFunctionBeginUser;
   
     PetscCall(DMShellGetContext(dm1, &da1));
@@ -285,17 +292,23 @@ static PetscErrorCode CreateInterpolation(DM dm1, DM dm2, Mat *mat, Vec *vec)
     ctx->M1 = M1;
     ctx->M2 = M2;
   
-    PetscCall(MatCreateShell(PETSC_COMM_SELF, M2, M1, M2, M1, ctx, mat));
-    PetscCall(MatShellSetOperation(*mat, MATOP_MULT, (void (*)(void))InterpMult));
+    PetscCall(MatCreateShell(PETSC_COMM_SELF, PETSC_DECIDE, PETSC_DECIDE, M2, M1, ctx, mat));
+    // PetscCall(MatShellSetOperation(*mat, MATOP_MULT, (void (*)(void))InterpMult));
 
-    // rethink how to do this
-    // PetscCall(VecSet(*vec, 0.5));
-    // set first and last to 0.66667
-    // PetscCall(VecSetValue(*vec, 0, 0.66667, INSERT_VALUES));
-    // PetscCall(VecSetValue(*vec, M2-1, 0.66667, INSERT_VALUES));
+    PetscCall(MatShellSetOperation(*mat, MATOP_MULT, (void (*)(void))RestrictMult));
+
+    PetscCall(MatShellSetOperation(*mat, MATOP_MULT_TRANSPOSE, (void (*)(void))RestrictMult));
+
+    PetscCall(DMCreateInterpolationScale(da1, da2, *mat, vec));
+
+    // PetscCall(VecDuplicate(*vec, &scale));
+    // *vec = NULL;
+    // *vec = scale;
+
+
     PetscFunctionReturn(PETSC_SUCCESS);
 }
-  
+
 PetscErrorCode InterpMult(Mat A, Vec X, Vec Y)
   {
     InterpCtx     *ctx;
@@ -333,46 +346,81 @@ PetscErrorCode InterpMult(Mat A, Vec X, Vec Y)
 
 static PetscErrorCode CreateRestriction(DM dm1, DM dm2, Mat *mat)
 {
-  DM             da1, da2;
-  PetscInt       i, M1, M2;
-  PetscInt       row, rows[2];
-  PetscScalar    vals[2];
+    DM        da1, da2;
+    InterpCtx *ctx;
+    PetscInt  M1, M2;
+  
+    Vec scale;
+
+    PetscFunctionBeginUser;
+  
+    PetscCall(DMShellGetContext(dm1, &da1));
+    PetscCall(DMShellGetContext(dm2, &da2));
+  
+    PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+    PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+  
+    PetscCall(PetscNew(&ctx));
+    ctx->M1 = M1;
+    ctx->M2 = M2;
+  
+    PetscCall(MatCreateShell(PETSC_COMM_SELF, PETSC_DECIDE, PETSC_DECIDE, M1, M2, ctx, mat));
+    PetscCall(MatShellSetOperation(*mat, MATOP_MULT, (void (*)(void))RestrictMult));
+
+    Mat A_aij;
+    MatCreate(PETSC_COMM_WORLD, &A_aij);
+    MatSetType(A_aij, MATAIJ);
+    MatSetSizes(A_aij, PETSC_DECIDE, PETSC_DECIDE, M1, M2);
+    MatSetUp(A_aij);
+    PetscCall(MatConvert(*mat, MATAIJ, MAT_INITIAL_MATRIX, &A_aij));
+
+    // MatView(A_aij, PETSC_VIEWER_STDOUT_WORLD);
+
+    PetscFunctionReturn(PETSC_SUCCESS);
+}
+
+
+PetscErrorCode RestrictMult(Mat A, Vec X, Vec Y)
+{
+  InterpCtx           *ctx;
+  const PetscScalar   *x_array;
+  PetscScalar         *y_array;
+  PetscInt             i;
+  Vec                  xlocal;
 
   PetscFunctionBeginUser;
+  PetscCall(MatShellGetContext(A, &ctx));
 
-  PetscCall(DMShellGetContext(dm1, &da1));
-  PetscCall(DMShellGetContext(dm2, &da2));
+  PetscCall(VecGetArrayRead(X, &x_array));
+  PetscCall(VecGetArray(Y, &y_array));
 
-  PetscCall(DMDAGetInfo(da1, NULL, &M1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
-  PetscCall(DMDAGetInfo(da2, NULL, &M2, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL));
+  PetscCall(VecSet(Y, 0.0));
+  PetscCall(VecGetArray(Y, &y_array)); 
 
-  PetscCall(MatCreateSeqAIJ(PETSC_COMM_SELF, M1, M2, 3, NULL, mat));
+  // for (i = 0; i < ctx->M2; ++i) {
+  //   if (i % 2 == 0) {
+  //     PetscInt row = i / 2;
+  //     if (row < ctx->M1) {
+  //       y_array[row] += x_array[i];
 
-  for (i = 0; i < M2; ++i) {
-    if (i % 2 == 0) {
-      row = i / 2;
-      if (row < M1) {
-        PetscCall(MatSetValue(*mat, row, i, 1.0, INSERT_VALUES));
-      }
-    } else {
-      row = (i - 1) / 2;
-      if (row + 1 < M1) {
-        rows[0] = row;
-        rows[1] = row + 1;
-        vals[0] = 0.5;
-        vals[1] = 0.5;
-        PetscCall(MatSetValues(*mat, 2, rows, 1, &i, vals, INSERT_VALUES));
-      }
-    }
-  }
+  //     }
+  //   } else {
+  //     PetscInt row = (i - 1) / 2;
+  //     if (row + 1 < ctx->M1) {
 
-  PetscCall(MatAssemblyBegin(*mat, MAT_FINAL_ASSEMBLY));
-  PetscCall(MatAssemblyEnd(*mat, MAT_FINAL_ASSEMBLY));
+  //       y_array[i] = 0.5 * (x_array[row] + x_array[row + 1]);
+  //     }
+  //   }
+  // }
 
-  //view the mat
-  PetscCall(MatView(*mat, PETSC_VIEWER_STDOUT_WORLD));
+
+
+  PetscCall(VecRestoreArrayRead(X, &x_array));
+  PetscCall(VecRestoreArray(Y, &y_array));
   PetscFunctionReturn(PETSC_SUCCESS);
 }
+
+
 
 static PetscErrorCode CreateGlobalVector(DM shell, Vec *x)
 {
